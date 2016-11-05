@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="script.service.panodpf.client" name="PanoDPFClient" version="1.0.0" provider-name="Remus Koos">
+    <requires>
+        <import addon="xbmc.python" version="2.1.0"/>
+    </requires>
+    <extension point="xbmc.service" library="panodpf_client.py" start="startup" />
+    <extension point="xbmc.addon.metadata">
+        <platform>all</platform>
+        <summary lang="en">Panoramic Digital Picture Frame</summary>
+        <description lang="en">This addon provides client functionality for the Panoramic Digital Picture Frame. The client controls the pictures displayed by the servers.</description>
+    </extension>
+</addon>

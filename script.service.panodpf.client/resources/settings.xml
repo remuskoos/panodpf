@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="32001">
+        <setting label="32035" type="ipaddress" id="multicast_address" default="224.3.29.71"/>
+        <setting label="32036" type="number" id="multicast_port" default="10000"/>
+        <setting type="sep"/>
+        <setting label="32037" type="folder" id="dpf_folder" source="auto"/>
+        <setting label="32040" type="slider" id="slideshow_delay" default="7" range="2,50" option="int" />
+        <setting label="32041" type="bool" id="recurse_into_subfolders" default="true"/>
+        <setting type="sep"/>
+        <setting label="32042" type="slider" id="server_timeout_wait" default="1" range="1,10" option="int" />
+    </category>
+</settings>
