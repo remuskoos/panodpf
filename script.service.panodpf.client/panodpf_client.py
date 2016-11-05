@@ -25,8 +25,8 @@ def pano_paths(pano_folder, recurse_into_subfolders=True):
     folder = pano_folder
     for file in file_list:
         if file.lower().endswith(PANO_SUFFIXES):
-            # For each picture file we construct and yield the relative path.
-            yield os.path.join(folder[len(pano_folder):], file)
+            # For each picture file we construct and yield the full path.
+            yield os.path.join(folder, file)
 
 
 def received_all_replies(sock):
@@ -42,8 +42,8 @@ def received_all_replies(sock):
             try:
                 reply = json.loads(json_reply)
                 nreplies_expected = reply.get('total_displays', 0)
-            except TypeError:
-                xbmc.log("Could not decode JSON reply: '{0}'".format(json_reply))
+            except (TypeError, ValueError) as e:
+                xbmc.log("Could not decode JSON reply '{0}': {1}".format(json_reply, e))
         except socket.timeout:
             xbmc.log("Timed out. Assuming no more replies (got {0} total).".format(nreplies))
             break
@@ -60,8 +60,8 @@ def received_all_replies(sock):
     return nreplies != 0 and nreplies == nreplies_expected
 
 
-def send_request_and_process_replies(sock, multicast_group, pano_path, request_id):
-    request = {"jsonrpc": "2.0", "method": "display_pano", "params": {"path": pano_path}, "id": request_id}
+def send_request_and_process_replies(sock, multicast_group, method, params=None, request_id=1):
+    request = {"jsonrpc": "2.0", "method": method, "params": params, "id": request_id}
     try:
         json_request = json.dumps(request)
     except TypeError as e:
@@ -106,7 +106,7 @@ def start_panodpf_client():
     # Receive/respond loop.
     while not monitor.abortRequested():
         for pano_path in pano_paths(pano_folder, recurse_into_subfolders=recurse):
-            send_request_and_process_replies(sock, multicast_group, pano_path, request_id)
+            send_request_and_process_replies(sock, multicast_group, "display_pano", {"path": pano_path}, request_id)
             request_id = 0 if request_id >= MAX_REQUEST_ID else request_id + 1
 
             # Sleep while the image is being displayed.

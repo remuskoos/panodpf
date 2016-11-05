@@ -4,7 +4,6 @@
         <setting label="32035" type="ipaddress" id="multicast_address" default="224.3.29.71"/>
         <setting label="32036" type="number" id="multicast_port" default="10000"/>
         <setting type="sep"/>
-        <setting label="32037" type="folder" id="dpf_folder" source="auto"/>
         <setting label="32038" type="number" id="current_display"/>
         <setting label="32039" type="number" id="total_displays"/>
     </category>
