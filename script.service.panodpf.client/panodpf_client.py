@@ -2,10 +2,11 @@
 # encoding: utf-8
 import os
 import json
-import xbmc
 import time
 import socket
 import struct
+
+import xbmc
 import xbmcvfs
 import xbmcaddon
 
@@ -37,8 +38,9 @@ def received_all_replies(sock):
     # Look for responses from all recipients.
     while True:
         xbmc.log("Waiting for ACKs from servers ...")
+        reply = None
         try:
-            json_reply, server = sock.recvfrom(256)
+            json_reply, server = sock.recvfrom(1024)
             try:
                 reply = json.loads(json_reply)
                 nreplies_expected = reply.get('total_displays', 0)
@@ -48,11 +50,12 @@ def received_all_replies(sock):
             xbmc.log("Timed out. Assuming no more replies (got {0} total).".format(nreplies))
             break
         else:
-            xbmc.log("Received '{0}' from {1}".format(reply, server))
-            current_display = reply.get('current_display')
-            if current_display not in reply_set:
-                reply_set.add(current_display)
-                nreplies += 1
+            if reply:
+                xbmc.log("Received '{0}' from {1}".format(reply, server))
+                current_display = reply.get('current_display')
+                if current_display not in reply_set:
+                    reply_set.add(current_display)
+                    nreplies += 1
 
     format_str = "Got {0} out of {1} replies.{2}"
     xbmc.log(format_str.format(nreplies, nreplies_expected, "" if nreplies != 0 and nreplies == nreplies_expected else " Retrying ..."))
@@ -80,27 +83,35 @@ def send_request_and_process_replies(sock, multicast_group, method, params=None,
     return True
 
 
-def start_panodpf_client():
-    # Instantiate a monitor object so we can check if we need to exit.
-    monitor = xbmc.Monitor()
-
-    multicast_address = __addon__.getSetting('multicast_address')
-    multicast_port = int(__addon__.getSetting('multicast_port'))
+def set_up_networking(multicast_address, multicast_port, server_timeout_wait=5):
     multicast_group = (multicast_address, multicast_port)
 
     # Create the datagram socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Set a timeout so the socket does not block indefinitely when trying to receive data.
-    server_timeout_wait = int(__addon__.getSetting('server_timeout_wait'))
     sock.settimeout(server_timeout_wait)
 
     # Set the time-to-live for messages to 1 so they do not go past the local network segment.
     ttl = struct.pack('b', 1)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 
+    return sock, multicast_group
+
+
+def start_panodpf_client():
+    # Instantiate a monitor object so we can check if we need to exit.
+    monitor = xbmc.Monitor()
+
+    # Get the configuration settings.
+    multicast_address = __addon__.getSetting('multicast_address')
+    multicast_port = int(__addon__.getSetting('multicast_port'))
+    server_timeout_wait = int(__addon__.getSetting('server_timeout_wait'))
     pano_folder = __addon__.getSetting('dpf_folder')
     recurse = True if __addon__.getSetting('recurse_into_subfolders').lower() == "true" else False
+
+    sock, multicast_group = set_up_networking(multicast_address, multicast_port, server_timeout_wait)
+
     request_id = 0
 
     # Receive/respond loop.

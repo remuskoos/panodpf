@@ -15,6 +15,9 @@ __addon__      = xbmcaddon.Addon()
 
 
 def safe_remove_file(full_file_path):
+    if not full_file_path:
+        return
+
     try:
         os.remove(full_file_path)
     except EnvironmentError:
@@ -64,9 +67,8 @@ def process_and_display_pano(full_pano_path, current_display, total_displays):
     try:
         cropped_pano_path = crop_and_save_pano(full_pano_path, PANO_TMP_FOLDER, current_display, total_displays)
     except IOError as e:
-        msg = "Failed to load and/or crop pano with path '{0}': {1}.".format(full_pano_path, e)
-        xbmc.log(msg, level=xbmc.LOGWARNING)
-        return None, msg
+        xbmc.log("Failed to load and/or crop pano with path '{0}': {1}.".format(full_pano_path, e), level=xbmc.LOGWARNING)
+        return None, "Failed to load and/or crop pano with path '{0}'.".format(full_pano_path)
 
     xbmc.log("Displaying pano slice {0} of {1} (path = '{2}')".format(current_display, total_displays, cropped_pano_path))
     xbmc.executebuiltin("ShowPicture({0})".format(cropped_pano_path))
@@ -93,10 +95,12 @@ def display_pano(params, current_display, total_displays):
 
 
 def turn_off_screen(params, current_display, total_displays):
+    os.system("vcgencmd display_power 0")
     return None, ""
 
 
 def turn_on_screen(params, current_display, total_displays):
+    os.system("vcgencmd display_power 1")
     return None, ""
 
 METHOD_TABLE = {"display_pano": display_pano,
@@ -146,11 +150,16 @@ def process_request_and_send_reply(sock, current_pano_id):
         xbmc.log(msg)
         send_reply(sock, address, reply, {'error': {"code": -2, "message": msg}})
         return None, current_pano_id
+    except Exception as e:
+        msg = "Failed to execute method '{0}' with params '{1}': {2}".format(method, params, e)
+        xbmc.log(msg)
+        send_reply(sock, address, reply, {'error': {"code": -4, "message": msg}})
+        return None, current_pano_id
 
     if method == 'display_pano':
         current_pano_id = request.get('id')
 
-    if not result:
+    if not result and method == 'display_pano':
         reply['error'] = {'code': -3, 'message': reason}
     else:
         reply['result'] = 'OK'
