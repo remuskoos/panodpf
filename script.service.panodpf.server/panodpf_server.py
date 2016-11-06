@@ -31,20 +31,25 @@ def crop_pano(im, chunk, tchunks):
     return cim
 
 
-def build_cropped_pano_path(full_pano_path, cropped_pano_folder, current_display, total_displays):
+def build_cropped_pano_path(full_pano_path, current_display, total_displays, cropped_pano_folder=PANO_TMP_FOLDER):
     pano_filename = os.path.basename(full_pano_path)
     imgname, imgext = pano_filename.split('.')
     cropped_pano_name = "{0}{1}of{2}.{3}".format(imgname, current_display, total_displays, imgext)
     return os.path.join(cropped_pano_folder, cropped_pano_name)
 
 
-def crop_and_save_pano(full_pano_path, cropped_pano_folder, current_display, total_displays):
+def crop_and_save_pano(full_pano_path, rotation, current_display, total_displays, cropped_pano_folder=PANO_TMP_FOLDER):
     pano_file = xbmcvfs.File(xbmc.translatePath(full_pano_path))
     pano_bytes_file = io.BytesIO(pano_file.readBytes())
     im = Image.open(pano_bytes_file)
 
     cim = crop_pano(im, current_display, total_displays)
-    cropped_pano_path = build_cropped_pano_path(full_pano_path, cropped_pano_folder, current_display, total_displays)
+    if rotation != 1:
+        rotation_angle = 90 if rotation == 0 else -90
+        xbmc.log("Rotating image with size {0} {1} degrees CCW ...".format(cim.size, rotation_angle))
+        cim = cim.rotate(rotation_angle, expand=1)
+
+    cropped_pano_path = build_cropped_pano_path(full_pano_path, current_display, total_displays, cropped_pano_folder)
     cim.save(cropped_pano_path)
 
     pano_bytes_file.close()
@@ -57,15 +62,9 @@ def crop_and_save_pano(full_pano_path, cropped_pano_folder, current_display, tot
     return cropped_pano_path
 
 
-def process_and_display_pano(full_pano_path, current_display, total_displays):
-    if not current_display or not total_displays:
-        xbmc.log("PanoDPFServer plugin is not fully configured yet. Ignoring pano display request.", level=xbmc.LOGWARNING)
-        format_str = "  full_pano_path = '{0}'  current_display = {1}  total_displays = {2}"
-        xbmc.log(format_str.format(full_pano_path, current_display, total_displays), level=xbmc.LOGWARNING)
-        return None, "PanoDPFServer is not fully configured."
-
+def process_and_display_pano(full_pano_path, rotation, current_display, total_displays):
     try:
-        cropped_pano_path = crop_and_save_pano(full_pano_path, PANO_TMP_FOLDER, current_display, total_displays)
+        cropped_pano_path = crop_and_save_pano(full_pano_path, rotation, current_display, total_displays)
     except IOError as e:
         xbmc.log("Failed to load and/or crop pano with path '{0}': {1}.".format(full_pano_path, e), level=xbmc.LOGWARNING)
         return None, "Failed to load and/or crop pano with path '{0}'.".format(full_pano_path)
@@ -91,7 +90,9 @@ def display_pano(params, current_display, total_displays):
         xbmc.log(msg)
         return None, msg
 
-    return process_and_display_pano(full_pano_path, current_display, total_displays)
+    rotation = params.get('rotation', 1)
+
+    return process_and_display_pano(full_pano_path, rotation, current_display, total_displays)
 
 
 def turn_off_screen(params, current_display, total_displays):
