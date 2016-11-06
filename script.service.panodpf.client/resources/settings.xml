@@ -7,6 +7,8 @@
         <setting label="32037" type="folder" id="dpf_folder" source="auto"/>
         <setting label="32040" type="slider" id="slideshow_delay" default="7" range="2,50" option="int" />
         <setting label="32041" type="bool" id="recurse_into_subfolders" default="true"/>
+        <setting label="32043" type="enum" id="rotation" default="1" lvalues="32044|32045|32046"/>
+        <setting label="32039" type="enum" id="total_displays" default="2" values="1|2|3|4|5|6|7|8|9"/>
         <setting type="sep"/>
         <setting label="32042" type="slider" id="server_timeout_wait" default="1" range="1,10" option="int" />
     </category>

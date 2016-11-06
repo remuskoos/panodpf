@@ -41,9 +41,26 @@ msgid "Amount of time to display each image"
 msgstr ""
 
 msgctxt "#32041"
-msgid "Recurse into subfolders (requires restart)"
+msgid "Recurse into subfolders"
 msgstr ""
 
 msgctxt "#32042"
 msgid "Maximum server timeout wait (requires restart)"
 msgstr "The maximum amount of time to wait for server replies. If in doubt leave as is."
+
+msgctxt "#32043"
+msgid "Picture rotation"
+msgstr ""
+
+msgctxt "#32044"
+msgid "90 Degrees CCW"
+msgstr ""
+
+msgctxt "#32045"
+msgid "No Rotation"
+msgstr ""
+
+msgctxt "#32046"
+msgid "90 Degrees CW"
+msgstr ""
+

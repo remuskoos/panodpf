@@ -118,30 +118,43 @@ def send_reply(sock, address, reply, reply_patch=None):
 
 
 def process_request_and_send_reply(sock, current_pano_id):
-    current_display = __addon__.getSetting('current_display')
-    current_display = int(current_display) if current_display else current_display
-    total_displays = __addon__.getSetting('total_displays')
-    total_displays = int(total_displays) if total_displays else total_displays
+    current_display = int(__addon__.getSetting('current_display')) + 1
+    total_displays = None
 
     xbmc.log("Waiting to receive message ...")
     json_request, address = sock.recvfrom(2048)
     xbmc.log("Received '{0}' from {1}".format(json_request, address))
-    reply = {"jsonrpc": "2.0", "result": "ERROR", "id": None, "current_display": current_display, "total_displays": total_displays}
+    reply = {"jsonrpc": "2.0", "result": "ERROR", "id": None, "current_display": current_display, "total_displays": None}
 
     try:
         request = json.loads(json_request)
     except TypeError as e:
         xbmc.log("Could not decode JSON request {0}: {1}".format(json_request, e))
-        send_reply(sock, address, reply, {'error': {"code": -1, "message": "Invalid Request"}})
+        send_reply(sock, address, reply, {'error': {"code": -1, "message": "Could not decode JSON request."}})
         return None, current_pano_id
 
     reply['id'] = request.get('id')
     method = request.get('method')
     params = request.get('params')
 
-    if method == 'display_pano' and reply.get('id') == current_pano_id:
-        send_reply(sock, address, reply, {'result': 'Duplicate'})
-        return None, current_pano_id
+    if method == 'display_pano':
+        if reply.get('id') == current_pano_id:
+            send_reply(sock, address, reply, {'result': 'Duplicate'})
+            return None, current_pano_id
+
+        try:
+            total_displays = params['total_displays']
+        except KeyError:
+            xbmc.log("Request did not specify the total number of displays. ")
+            send_reply(sock, address, reply, {'error': {"code": -5, "message": "Request did not specify the total number of displays."}})
+            return None, current_pano_id
+
+        reply['total_displays'] = total_displays
+
+        if current_display > total_displays:
+            xbmc.log("Current display number {0} is bigger than the total number of displays {1}.".format(current_display, total_displays))
+            send_reply(sock, address, reply, {'error': {"code": -6, "message": "Current display number is bigger than the total number of displays."}})
+            return None, current_pano_id
 
     try:
         result, reason = METHOD_TABLE[method](params, current_display, total_displays)

@@ -107,17 +107,21 @@ def start_panodpf_client():
     multicast_address = __addon__.getSetting('multicast_address')
     multicast_port = int(__addon__.getSetting('multicast_port'))
     server_timeout_wait = int(__addon__.getSetting('server_timeout_wait'))
-    pano_folder = __addon__.getSetting('dpf_folder')
-    recurse = True if __addon__.getSetting('recurse_into_subfolders').lower() == "true" else False
 
     sock, multicast_group = set_up_networking(multicast_address, multicast_port, server_timeout_wait)
 
     request_id = 0
 
-    # Receive/respond loop.
     while not monitor.abortRequested():
+        pano_folder = __addon__.getSetting('dpf_folder')
+        recurse = True if __addon__.getSetting('recurse_into_subfolders').lower() == "true" else False
+
         for pano_path in pano_paths(pano_folder, recurse_into_subfolders=recurse):
-            send_request_and_process_replies(sock, multicast_group, "display_pano", {"path": pano_path}, request_id)
+            total_displays = int(__addon__.getSetting('total_displays')) + 1
+            rotation = int(__addon__.getSetting('rotation'))
+            xbmc.log("total_displays = {0}  rotation = {1}".format(total_displays, rotation))
+            display_pano_params = {"path": pano_path, "rotation": rotation, "total_displays": total_displays}
+            send_request_and_process_replies(sock, multicast_group, "display_pano", display_pano_params, request_id)
             request_id = 0 if request_id >= MAX_REQUEST_ID else request_id + 1
 
             # Sleep while the image is being displayed.
