@@ -5,15 +5,28 @@ import json
 import time
 import socket
 import struct
+import argparse
 
-import xbmc
-import xbmcvfs
-import xbmcaddon
+plugin_mode = True
 
-__addon__      = xbmcaddon.Addon()
+# This try/except for imports helps us to figure out if we are in plugin or standalone mode.
+try:
+    import xbmc
+    import xbmcvfs
+    import xbmcaddon
+
+    __addon__      = xbmcaddon.Addon()
+    log = xbmc.log
+except ImportError:
+    plugin_mode = False
+
+    # Use 'level' here to match 'xbmc.log(...)' signature.
+    def log(message, level=None):
+        print message
 
 PANO_SUFFIXES = (".jpg", ".png", ".tiff", ".gif")
 MAX_REQUEST_ID = 100000
+
 
 # FIXME: Add a randomize option.
 # FIXME: Recurse into subfolders.
@@ -30,54 +43,56 @@ def pano_paths(pano_folder, recurse_into_subfolders=True):
             yield os.path.join(folder, file)
 
 
-def received_all_replies(sock):
+def received_all_replies(sock, nreplies_expected):
     nreplies = 0
-    nreplies_expected = 0
     reply_set = set()
 
     # Look for responses from all recipients.
     while True:
-        xbmc.log("Waiting for ACKs from servers ...")
+        log("Waiting for replies from servers. Expecting {0} ACKs ...".format(nreplies_expected))
         reply = None
         try:
             json_reply, server = sock.recvfrom(1024)
             try:
                 reply = json.loads(json_reply)
-                nreplies_expected = reply.get('total_displays', 0)
             except (TypeError, ValueError) as e:
-                xbmc.log("Could not decode JSON reply '{0}': {1}".format(json_reply, e))
+                log("Could not decode JSON reply '{0}': {1}".format(json_reply, e))
         except socket.timeout:
-            xbmc.log("Timed out. Assuming no more replies (got {0} total).".format(nreplies))
+            log("Timed out. Assuming no more replies (got {0} total).".format(nreplies))
             break
         else:
             if reply:
-                xbmc.log("Received '{0}' from {1}".format(reply, server))
+                log("Received '{0}' from {1}".format(reply, server))
                 current_display = reply.get('current_display')
                 if current_display not in reply_set:
                     reply_set.add(current_display)
                     nreplies += 1
 
+        # Break out of the loop if we got all the replies we expected.
+        if nreplies and nreplies == nreplies_expected:
+            break
+
     format_str = "Got {0} out of {1} replies.{2}"
-    xbmc.log(format_str.format(nreplies, nreplies_expected, "" if nreplies != 0 and nreplies == nreplies_expected else " Retrying ..."))
+    log(format_str.format(nreplies, nreplies_expected, "" if nreplies != 0 and nreplies == nreplies_expected else " Retrying ..."))
 
     return nreplies != 0 and nreplies == nreplies_expected
 
 
-def send_request_and_process_replies(sock, multicast_group, method, params=None, request_id=1):
+def send_request_and_process_replies(sock, multicast_group, nreplies_expected,  method, params=None, request_id=1):
     request = {"jsonrpc": "2.0", "method": method, "params": params, "id": request_id}
     try:
         json_request = json.dumps(request)
     except TypeError as e:
-        xbmc.log("Failed to JSON encode message '{0}': {1}".format(request, e))
+        log("Failed to JSON encode message '{0}': {1}".format(request, e))
         return False
 
     # Retry loop. Keep sending the same request until we get replies from all servers.
     while True:
-        xbmc.log("Sending request to servers: {0}".format(json_request))
+        log("Sending request to servers: {0}".format(json_request))
         # Send data to the multicast group.
         sent = sock.sendto(json_request, multicast_group)
 
-        if received_all_replies(sock):
+        if received_all_replies(sock, nreplies_expected):
             break
 
     return True
@@ -119,12 +134,25 @@ def start_panodpf_client():
         for pano_path in pano_paths(pano_folder, recurse_into_subfolders=recurse):
             total_displays = int(__addon__.getSetting('total_displays')) + 1
             rotation = int(__addon__.getSetting('rotation'))
-            xbmc.log("total_displays = {0}  rotation = {1}".format(total_displays, rotation))
+            log("total_displays = {0}  rotation = {1}".format(total_displays, rotation))
             display_pano_params = {"path": pano_path, "rotation": rotation, "total_displays": total_displays}
-            send_request_and_process_replies(sock, multicast_group, "display_pano", display_pano_params, request_id)
+            send_request_and_process_replies(sock, multicast_group, total_displays, "display_pano", display_pano_params, request_id)
             request_id = 0 if request_id >= MAX_REQUEST_ID else request_id + 1
 
             # Sleep while the image is being displayed.
             time.sleep(int(__addon__.getSetting('slideshow_delay')))
 
-start_panodpf_client()
+if plugin_mode:
+    start_panodpf_client()
+else:
+    parser = argparse.ArgumentParser(description='Filter panoramas by form factor.', epilog="At least one of '-l' or '-g' should be specified.")
+    parser.add_argument("multicast_address", type=str, help="Multicast address to send the request to.")
+    parser.add_argument("multicast_port", type=int, help="Multicast port to send the request to.")
+    parser.add_argument("nreplies_expected", type=int, help="The number of replies expected as a result of our request. "
+                                                            "We keep retying until we get the expected numbers of replies.")
+    parser.add_argument("command", type=str, help="The command to send to the multicast group.")
+    parser.add_argument("-t", "--timeout-wait", type=int, default=5, help="The amount of seconds to wait for the servers to reply before giving up.")
+    args = parser.parse_args()
+
+    sock, multicast_group = set_up_networking(args.multicast_address, args.multicast_port, server_timeout_wait=args.timeout_wait)
+    send_request_and_process_replies(sock, multicast_group, args.nreplies_expected, args.command)

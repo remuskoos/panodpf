@@ -41,23 +41,26 @@ def build_cropped_pano_path(full_pano_path, current_display, total_displays, cro
 def crop_and_save_pano(full_pano_path, rotation, current_display, total_displays, cropped_pano_folder=PANO_TMP_FOLDER):
     pano_file = xbmcvfs.File(xbmc.translatePath(full_pano_path))
     pano_bytes_file = io.BytesIO(pano_file.readBytes())
-    im = Image.open(pano_bytes_file)
 
+    im = Image.open(pano_bytes_file)
     cim = crop_pano(im, current_display, total_displays)
+
+    # Release unneeded memory right away to keep memory consumption down.
+    del im
+    pano_file.close()
+    del pano_file
+    pano_bytes_file.close()
+    del pano_bytes_file
+
     if rotation != 1:
         rotation_angle = 90 if rotation == 0 else -90
-        xbmc.log("Rotating image with size {0} {1} degrees CCW ...".format(cim.size, rotation_angle))
-        cim = cim.rotate(rotation_angle, expand=1)
+        xbmc.log("Rotating image with size {0} 90 degrees {1}CW ...".format(cim.size, "C" if rotation == 0 else ""))
+        rotated_cim = cim.rotate(rotation_angle, expand=1)
+        del cim
+        cim = rotated_cim
 
     cropped_pano_path = build_cropped_pano_path(full_pano_path, current_display, total_displays, cropped_pano_folder)
     cim.save(cropped_pano_path)
-
-    pano_bytes_file.close()
-    pano_file.close()
-
-    del im
-    del pano_file
-    del pano_bytes_file
 
     return cropped_pano_path
 
@@ -139,10 +142,6 @@ def process_request_and_send_reply(sock, current_pano_id):
     params = request.get('params')
 
     if method == 'display_pano':
-        if reply.get('id') == current_pano_id:
-            send_reply(sock, address, reply, {'result': 'Duplicate'})
-            return None, current_pano_id
-
         try:
             total_displays = params['total_displays']
         except KeyError:
@@ -151,6 +150,10 @@ def process_request_and_send_reply(sock, current_pano_id):
             return None, current_pano_id
 
         reply['total_displays'] = total_displays
+
+        if request.get('id') == current_pano_id:
+            send_reply(sock, address, reply, {'result': 'Duplicate'})
+            return None, current_pano_id
 
         if current_display > total_displays:
             xbmc.log("Current display number {0} is bigger than the total number of displays {1}.".format(current_display, total_displays))
