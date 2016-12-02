@@ -199,7 +199,7 @@ def start_panodpf_server():
 
     # Bind to the server address.
     sock.bind(('', multicast_port))
-    xbmc.log("Started multicast Pano DPF UDP server on port {0} ...".format(multicast_port))
+    xbmc.log("Started multicast Pano DPF UDP server on multicast address {0} and port {1} ...".format(multicast_address, multicast_port))
 
     # Tell the operating system to add the socket to the multicast group on all interfaces.
     group = socket.inet_aton(multicast_address)

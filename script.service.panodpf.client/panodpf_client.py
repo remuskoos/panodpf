@@ -30,7 +30,6 @@ MAX_REQUEST_ID = 100000
 
 
 def get_random_file_path(pano_folder, recurse_into_subfolders=True):
-    log("get_random_file_path({0}, {1})".format(pano_folder, recurse_into_subfolders))
     folder_list, file_list = xbmcvfs.listdir(xbmc.translatePath(pano_folder))
 
     # Filter our file list by the allowed extensions.
@@ -39,25 +38,22 @@ def get_random_file_path(pano_folder, recurse_into_subfolders=True):
     file_list_len = len(file_list)
     total_len = folder_list_len + file_list_len
 
-    log("folder_list = {0}  file_list = {1}  folder_list_len = {2}  file_list_len = {3}".format(folder_list, file_list, folder_list_len, file_list_len))
     if total_len == 0:
-        yield None
+        return None
 
     if not recurse_into_subfolders:
-        yield None if not file_list else os.path.join(pano_folder, random.choice(file_list))
+        return None if not file_list else os.path.join(pano_folder, random.choice(file_list))
 
     # At this point 'total_len' is at least 1 so we have at least a file or a folder.
     choice_idx = random.choice(xrange(total_len))
-    log("choice_idx = {0}".format(choice_idx))
 
     # If this is the case it means that we have at least one file in the file list.
     if choice_idx >= folder_list_len:
         final_path = os.path.join(pano_folder, file_list[choice_idx - folder_list_len])
-        log("Returning path: '{0}' ...".format(final_path))
-        yield final_path
+        return final_path
 
-    # FIXME: Can this cause an infinite recursion ?
-    get_random_file_path(os.path.join(pano_folder, folder_list[choice_idx]), recurse_into_subfolders)
+    new_pano_folder = pano_folder + os.sep + folder_list[choice_idx]
+    return get_random_file_path(new_pano_folder, recurse_into_subfolders)
 
 
 def xbmcvfs_walk(pano_folder, recurse_into_subfolders=True):
@@ -79,13 +75,11 @@ def xbmcvfs_walk(pano_folder, recurse_into_subfolders=True):
 
 
 def pano_paths(pano_folder, recurse_into_subfolders=True, randomize=True):
-    log("pano_paths({0}, {1}, {2})".format(pano_folder, recurse_into_subfolders, randomize))
     if not pano_folder:
         return
 
     if randomize:
-        for path in get_random_file_path(pano_folder, recurse_into_subfolders):
-            yield path
+        yield get_random_file_path(pano_folder, recurse_into_subfolders)
     else:
         for folder, folder_list, file_list in xbmcvfs_walk(pano_folder, recurse_into_subfolders):
             for file in file_list:
@@ -186,8 +180,7 @@ def start_panodpf_client():
         for pano_path in pano_paths(pano_folder, recurse_into_subfolders=recurse, randomize=randomize):
             if not pano_path:
                 log("Got None path from 'pano_paths({0}, {1}, {2})' ...".format(pano_folder, recurse, randomize))
-                # Sleep while the image is being displayed.
-                time.sleep(int(__addon__.getSetting('slideshow_delay')))
+                time.sleep(1)
                 continue
 
             total_displays = int(__addon__.getSetting('total_displays')) + 1
