@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
     <category label="32001">
-        <setting label="32035" type="ipaddress" id="multicast_address" default="224.3.29.71"/>
+        <setting label="32035" type="ipaddress" id="multicast_address" default="239.0.0.1"/>
         <setting label="32036" type="number" id="multicast_port" default="10000"/>
         <setting type="sep"/>
         <setting label="32038" type="enum" id="current_display" default="0" values="1|2|3|4|5|6|7|8|9"/>

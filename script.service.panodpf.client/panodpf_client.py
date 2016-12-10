@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
+"""
+File that implements a panoramic display Digital Picture Frame (DPF) client.
+
+Written by Remus Koos.
+"""
+
 import os
 import json
 import time
@@ -27,33 +33,15 @@ except ImportError:
 
 ALLOWED_EXTENSIONS = (".jpg", ".png", ".tiff", ".gif")
 MAX_REQUEST_ID = 100000
+PLAYLIST_FILE_NAME = "/tmp/PANODPF.playlist"
 
 
-def get_random_file_path(pano_folder, recurse_into_subfolders=True):
-    folder_list, file_list = xbmcvfs.listdir(xbmc.translatePath(pano_folder))
+def display_notification(message, time_in_s=10):
+    xbmc.executebuiltin("Notification(PanoDPFClient,{0},{1})".format(message, time_in_s))
 
-    # Filter our file list by the allowed extensions.
-    file_list = [f for f in file_list if f.lower().endswith(ALLOWED_EXTENSIONS)]
-    folder_list_len = len(folder_list)
-    file_list_len = len(file_list)
-    total_len = folder_list_len + file_list_len
 
-    if total_len == 0:
-        return None
-
-    if not recurse_into_subfolders:
-        return None if not file_list else os.path.join(pano_folder, random.choice(file_list))
-
-    # At this point 'total_len' is at least 1 so we have at least a file or a folder.
-    choice_idx = random.choice(xrange(total_len))
-
-    # If this is the case it means that we have at least one file in the file list.
-    if choice_idx >= folder_list_len:
-        final_path = os.path.join(pano_folder, file_list[choice_idx - folder_list_len])
-        return final_path
-
-    new_pano_folder = pano_folder + os.sep + folder_list[choice_idx]
-    return get_random_file_path(new_pano_folder, recurse_into_subfolders)
+def xbmc_file_exists(xbmc_file_name):
+    return xbmcvfs.exists(xbmc.translatePath(xbmc_file_name))
 
 
 def xbmcvfs_walk(pano_folder, recurse_into_subfolders=True):
@@ -74,18 +62,69 @@ def xbmcvfs_walk(pano_folder, recurse_into_subfolders=True):
             break
 
 
-def pano_paths(pano_folder, recurse_into_subfolders=True, randomize=True):
-    if not pano_folder:
-        return
+def generate_playlist(pano_folder, recurse_into_subfolders, playlist_file_name=PLAYLIST_FILE_NAME):
+    nitems = 0
 
-    if randomize:
-        yield get_random_file_path(pano_folder, recurse_into_subfolders)
-    else:
+    with open(playlist_file_name, "w+b") as fd:
         for folder, folder_list, file_list in xbmcvfs_walk(pano_folder, recurse_into_subfolders):
             for file in file_list:
                 if file.lower().endswith(ALLOWED_EXTENSIONS):
-                    # For each picture file we construct and yield the full path.
-                    yield os.path.join(folder, file)
+                    # For each picture file we construct and write the full path.
+                    fd.write(os.path.join(folder, file) + os.linesep)
+                    nitems += 1
+
+    log("Generated playlist '{0}' with {1} items.".format(playlist_file_name, nitems))
+    return playlist_file_name, nitems
+
+
+def get_random_file_path_from_paylist(playlist_file_name, nitems):
+    idx = random.randint(0, nitems - 1)
+    current_idx = 0
+
+    for line in open(playlist_file_name):
+        if idx == current_idx:
+            return line.strip()
+
+        current_idx += 1
+
+    log("Could not find index {0} in playlist '{1}'. Returning last item '{2}'.".format(idx, playlist_file_name, line), level=xbmc.LOGERROR)
+
+    return line
+
+
+def yield_random_pano_paths_from_palylist(playlist_file_name, nitems):
+    nyielded_paths = 0
+
+    while True:
+        yield get_random_file_path_from_paylist(playlist_file_name, nitems)
+        nyielded_paths += 1
+
+        # Return if we generated nitems or more so the playlist has a chance to get rebuilt in case we added new files.
+        if nyielded_paths >= nitems:
+            log("Yielded {0} random pano paths. Returning to enable playlist rebuild ...".format(nyielded_paths))
+            return
+
+
+def pano_paths(pano_folder, recurse_into_subfolders=True, randomize=True):
+    npano_paths = 0
+
+    if not pano_folder:
+        #display_notification("Pano folder is not configured")
+        return
+
+    playlist_file_name, nitems = generate_playlist(pano_folder, recurse_into_subfolders)
+    if not nitems:
+        #display_notification("Generated playlist has no items")
+        return
+
+    if randomize:
+        for pano_file_path in yield_random_pano_paths_from_palylist(playlist_file_name, nitems):
+            log("Returning random PANODPF playlist item '{0}' ...".format(pano_file_path))
+            yield pano_file_path
+    else:
+        for pano_file_path in open(playlist_file_name):
+            log("Returning sequential PANODPF playlist item '{0}' ...".format(pano_file_path))
+            yield pano_file_path
 
 
 def received_all_replies(sock, nreplies_expected):
@@ -182,6 +221,10 @@ def start_panodpf_client():
                 log("Got None path from 'pano_paths({0}, {1}, {2})' ...".format(pano_folder, recurse, randomize))
                 time.sleep(1)
                 continue
+
+            if not xbmc_file_exists(pano_path):
+                log("Could not open pano '{0}'. Namespace might have changed. Rebuilding playlist ...".format(pano_path))
+                break
 
             total_displays = int(__addon__.getSetting('total_displays')) + 1
             rotation = int(__addon__.getSetting('rotation'))
