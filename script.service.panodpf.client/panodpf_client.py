@@ -34,6 +34,8 @@ except ImportError:
 ALLOWED_EXTENSIONS = (".jpg", ".png", ".tiff", ".gif")
 MAX_REQUEST_ID = 100000
 PLAYLIST_FILE_NAME = "/tmp/PANODPF.playlist"
+DISPLAY_SCHEDULE_TYPE_MAPPING = {0: 'Flat', 1: 'Any', 2: 'LR', 3: 'RL', 4: 'V', 5: 'Random'}
+DELAY_INCREMENT_MAPPING = {0: 100, 1: 200, 2: 300, 3: 400, 4: 500, 5: 600, 6: 700, 7: 800, 8: 900, 9: 1000, 10: 1500, 11: 2000, 12: 2500, 13: 3000}
 
 
 def display_notification(message, time_in_s=10):
@@ -42,6 +44,34 @@ def display_notification(message, time_in_s=10):
 
 def xbmc_file_exists(xbmc_file_name):
     return xbmcvfs.exists(xbmc.translatePath(xbmc_file_name))
+
+
+def get_display_schedule(schedule_type, total_displays, delay_increment):
+    display_schedules = ('LR', 'RL', 'V', 'Random', 'Flat')
+    if schedule_type == 'Any':
+        schedule_type = random.choice(display_schedules)
+
+    log("Using '{0}' schedule type.".format(schedule_type))
+
+    if schedule_type == 'LR':
+        return [i * delay_increment for i in xrange(total_displays)]
+    elif schedule_type == 'RL':
+        return [(total_displays - i - 1) * delay_increment for i in xrange(total_displays)]
+    elif schedule_type == 'V':
+        if total_displays <= 2:
+            return [0 for i in xrange(total_displays)]
+        left_list_len = int(round(float(total_displays)/2))
+        display_schedule = [(left_list_len - i - 1) * delay_increment for i in xrange(left_list_len)]
+        odd_displays = total_displays % 2
+        right_list_len = left_list_len - 1 if odd_displays else left_list_len
+        display_schedule.extend([(1 if odd_displays else 0 + i) * delay_increment for i in xrange(right_list_len)])
+        return display_schedule
+    elif schedule_type == 'Random':
+        random_schedule = [i * delay_increment for i in xrange(total_displays)]
+        random.shuffle(random_schedule)
+        return random_schedule
+    else:
+        return [0 for i in xrange(total_displays)]
 
 
 def xbmcvfs_walk(pano_folder, recurse_into_subfolders=True):
@@ -150,8 +180,8 @@ def received_all_replies(sock, nreplies_expected):
                 current_display = reply.get('current_display')
                 if current_display not in reply_set:
                     reply_set.add(current_display)
-                    nreplies += 1
 
+        nreplies = len(reply_set)
         # Break out of the loop if we got all the replies we expected.
         if nreplies and nreplies == nreplies_expected:
             break
@@ -228,12 +258,26 @@ def start_panodpf_client():
 
             total_displays = int(__addon__.getSetting('total_displays')) + 1
             rotation = int(__addon__.getSetting('rotation'))
-            display_pano_params = {"path": pano_path, "rotation": rotation, "total_displays": total_displays}
+            display_schedule_type_idx = int(__addon__.getSetting('display_schedule_type'))
+            delay_increment_idx = int(__addon__.getSetting('delay_increment'))
+            #log("display_schedule_type_idx = {0}  delay_increment_idx = {1}".format(display_schedule_type_idx, delay_increment_idx))
+            display_schedule_type = DISPLAY_SCHEDULE_TYPE_MAPPING[display_schedule_type_idx]
+            delay_increment = DELAY_INCREMENT_MAPPING[delay_increment_idx]
+            #log("display_schedule_type = {0}  delay_increment = {1}".format(display_schedule_type, delay_increment))
+
+            process_pano_params = {"path": pano_path, "rotation": rotation, "total_displays": total_displays}
+            send_request_and_process_replies(sock, multicast_group, total_displays, "process_pano", process_pano_params, request_id)
+
+            request_id += 1
+            display_pano_params = {"path": pano_path, "total_displays": total_displays,
+                                   "display_schedule": get_display_schedule(display_schedule_type, total_displays, delay_increment)}
             send_request_and_process_replies(sock, multicast_group, total_displays, "display_pano", display_pano_params, request_id)
-            request_id = 0 if request_id >= MAX_REQUEST_ID else request_id + 1
 
             # Sleep while the image is being displayed.
             time.sleep(int(__addon__.getSetting('slideshow_delay')))
+
+            # Make sure the request ID does not overflow.
+            request_id = 0 if request_id >= MAX_REQUEST_ID else request_id + 1
 
 if plugin_mode:
     log("Entering PanoDPFClient plugin mode ...")

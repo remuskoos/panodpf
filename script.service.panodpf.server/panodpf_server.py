@@ -1,6 +1,7 @@
 import io
 import os
 import json
+import time
 import xbmc
 import socket
 import struct
@@ -13,6 +14,7 @@ PANO_TMP_FOLDER = "/tmp"
 
 __addon__      = xbmcaddon.Addon()
 
+full_pano_path_to_pano_slice_path = {}
 
 def safe_remove_file(full_file_path):
     if not full_file_path:
@@ -65,22 +67,22 @@ def crop_and_save_pano(full_pano_path, rotation, current_display, total_displays
     return cropped_pano_path
 
 
-def process_and_display_pano(full_pano_path, rotation, current_display, total_displays):
+def create_pano_slice(full_pano_path, rotation, current_display, total_displays):
+    global full_pano_path_to_pano_slice_path
+
     try:
-        cropped_pano_path = crop_and_save_pano(full_pano_path, rotation, current_display, total_displays)
+        pano_slice_path = crop_and_save_pano(full_pano_path, rotation, current_display, total_displays)
     except IOError as e:
         xbmc.log("Failed to load and/or crop pano with path '{0}': {1}.".format(full_pano_path, e), level=xbmc.LOGWARNING)
         return None, "Failed to load and/or crop pano with path '{0}'.".format(full_pano_path)
 
-    xbmc.log("Displaying pano slice {0} of {1} (path = '{2}')".format(current_display, total_displays, cropped_pano_path))
-    xbmc.executebuiltin("ShowPicture({0})".format(cropped_pano_path))
+    # Save the mapping to pano_slice_path so we can retrieve it in 'display_pano'.
+    full_pano_path_to_pano_slice_path = {full_pano_path: pano_slice_path}
 
-    return cropped_pano_path, ""
+    return pano_slice_path, ""
 
 
-########################################################################################################################
-# JSON RPC methods and table.                                                                                          #
-def display_pano(params, current_display, total_displays):
+def get_full_pano_path_from_params(params):
     if not params:
         msg = "Invalid 'display_pano' params: '{0}'".format(params)
         xbmc.log(msg)
@@ -93,23 +95,80 @@ def display_pano(params, current_display, total_displays):
         xbmc.log(msg)
         return None, msg
 
+    return full_pano_path, ""
+
+
+def apply_display_schedule(params, current_display, full_pano_path):
+    try:
+        display_schedule = params['display_schedule']
+        try:
+            sleep_time = display_schedule[current_display - 1]
+            time.sleep(sleep_time/1000.0)
+        except KeyError:
+            xbmc.log("Could not get sleep time from display schedule '{0}' for display {1}. Using 0 sleep time.".format(display_schedule, current_display))
+    except KeyError:
+        xbmc.log("Did not get display schedule for pano '{0}'. Using 0 sleep time.".format(full_pano_path))
+
+
+########################################################################################################################
+# JSON RPC methods and table.                                                                                          #
+def process_pano(params, current_display, total_displays):
+    #xbmc.log("process_pano(params = {0}, current_display = {1}, total_displays = {2})".format(params, current_display, total_displays))
+    full_pano_path, msg = get_full_pano_path_from_params(params)
+    if not full_pano_path:
+        return full_pano_path, msg
+
     rotation = params.get('rotation', 1)
 
-    return process_and_display_pano(full_pano_path, rotation, current_display, total_displays)
+    return create_pano_slice(full_pano_path, rotation, current_display, total_displays)
 
 
-def turn_off_screen(params, current_display, total_displays):
+def display_pano(params, current_display, total_displays):
+    global full_pano_path_to_pano_slice_path
+    sleep_time = 0
+
+    full_pano_path, msg = get_full_pano_path_from_params(params)
+    if not full_pano_path:
+        return full_pano_path, msg
+
+    try:
+        pano_slice_path = full_pano_path_to_pano_slice_path[full_pano_path]
+    except KeyError:
+        return None, "Could not map full pano path '{0}' to pano slice path. You need to send 'process_pano' command first.".format(full_pano_path)
+
+    apply_display_schedule(params, current_display, full_pano_path)
+    xbmc.log("Displaying pano slice {0} of {1} (path = '{2}')".format(current_display, total_displays, pano_slice_path))
+    xbmc.executebuiltin("ShowPicture({0})".format(pano_slice_path))
+
+    return pano_slice_path, ""
+
+
+def turn_off_display(params, current_display, total_displays):
     os.system("vcgencmd display_power 0")
     return None, ""
 
 
-def turn_on_screen(params, current_display, total_displays):
+def turn_on_display(params, current_display, total_displays):
     os.system("vcgencmd display_power 1")
     return None, ""
 
-METHOD_TABLE = {"display_pano": display_pano,
-                "turn_off_screen": turn_off_screen,
-                "turn_on_screen": turn_on_screen}
+
+def restart(params, current_display, total_displays):
+    xbmc.executebuiltin("RestartApp")
+    return None, ""
+
+
+def reboot(params, current_display, total_displays):
+    xbmc.executebuiltin("Reboot")
+    return None, ""
+
+
+METHOD_TABLE = {"process_pano": process_pano,
+                "display_pano": display_pano,
+                "turn_off_display": turn_off_display,
+                "turn_on_display": turn_on_display,
+                "restart": restart,
+                "reboot": reboot}
 # End JSON RPC methods and table.                                                                                      #
 ########################################################################################################################
 
@@ -141,7 +200,7 @@ def process_request_and_send_reply(sock, current_pano_id):
     method = request.get('method')
     params = request.get('params')
 
-    if method == 'display_pano':
+    if method in ('process_pano', 'display_pano'):
         try:
             total_displays = params['total_displays']
         except KeyError:
@@ -173,10 +232,10 @@ def process_request_and_send_reply(sock, current_pano_id):
         send_reply(sock, address, reply, {'error': {"code": -4, "message": msg}})
         return None, current_pano_id
 
-    if method == 'display_pano':
+    if method in ('process_pano', 'display_pano'):
         current_pano_id = request.get('id')
 
-    if not result and method == 'display_pano':
+    if not result and method in ('process_pano', 'display_pano'):
         reply['error'] = {'code': -3, 'message': reason}
     else:
         reply['result'] = 'OK'

@@ -68,3 +68,35 @@ msgctxt "#32047"
 msgid "Randomize"
 msgstr ""
 
+msgctxt "#32048"
+msgid "Display schedule"
+msgstr ""
+
+msgctxt "#32049"
+msgid "Flat"
+msgstr ""
+
+msgctxt "#32050"
+msgid "Any"
+msgstr ""
+
+msgctxt "#32051"
+msgid "Left to right"
+msgstr ""
+
+msgctxt "#32052"
+msgid "Right to left"
+msgstr ""
+
+msgctxt "#32053"
+msgid "V"
+msgstr ""
+
+msgctxt "#32054"
+msgid "Random"
+msgstr ""
+
+msgctxt "#32055"
+msgid "Delay increment (ms)"
+msgstr ""
+
