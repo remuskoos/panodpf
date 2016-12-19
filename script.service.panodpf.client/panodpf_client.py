@@ -46,6 +46,12 @@ def xbmc_file_exists(xbmc_file_name):
     return xbmcvfs.exists(xbmc.translatePath(xbmc_file_name))
 
 
+def get_local_ip_address():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(('8.8.8.8', 0))  # connecting to a UDP address doesn't send packets
+    return s.getsockname()[0]
+
+
 def get_display_schedule(schedule_type, total_displays, delay_increment):
     display_schedules = ('LR', 'RL', 'V', 'Random', 'Flat')
     if schedule_type == 'Any':
@@ -61,10 +67,11 @@ def get_display_schedule(schedule_type, total_displays, delay_increment):
         if total_displays <= 2:
             return [0 for i in xrange(total_displays)]
         left_list_len = int(round(float(total_displays)/2))
-        display_schedule = [(left_list_len - i - 1) * delay_increment for i in xrange(left_list_len)]
-        odd_displays = total_displays % 2
-        right_list_len = left_list_len - 1 if odd_displays else left_list_len
-        display_schedule.extend([(1 if odd_displays else 0 + i) * delay_increment for i in xrange(right_list_len)])
+        display_schedule = [(left_list_len - i - 1) * delay_increment * 2 for i in xrange(left_list_len)]
+        right_list = display_schedule[0:left_list_len - (total_displays % 2)]
+        right_list.reverse()
+        log("display_schedule: {0}  left_list_len: {1}  right_list: {2}".format(display_schedule, left_list_len, right_list))
+        display_schedule.extend(right_list)
         return display_schedule
     elif schedule_type == 'Random':
         random_schedule = [i * delay_increment for i in xrange(total_displays)]

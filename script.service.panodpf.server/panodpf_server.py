@@ -165,8 +165,8 @@ def reboot(params, current_display, total_displays):
 
 METHOD_TABLE = {"process_pano": process_pano,
                 "display_pano": display_pano,
-                "turn_off_display": turn_off_display,
-                "turn_on_display": turn_on_display,
+                "off": turn_off_display,
+                "on": turn_on_display,
                 "restart": restart,
                 "reboot": reboot}
 # End JSON RPC methods and table.                                                                                      #
