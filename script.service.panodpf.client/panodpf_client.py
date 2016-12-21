@@ -14,6 +14,8 @@ import struct
 import random
 import argparse
 
+from Queue import Queue
+
 plugin_mode = True
 
 # This try/except for imports helps us to figure out if we are in plugin or standalone mode.
@@ -35,7 +37,66 @@ ALLOWED_EXTENSIONS = (".jpg", ".png", ".tiff", ".gif")
 MAX_REQUEST_ID = 100000
 PLAYLIST_FILE_NAME = "/tmp/PANODPF.playlist"
 DISPLAY_SCHEDULE_TYPE_MAPPING = {0: 'Flat', 1: 'Any', 2: 'LR', 3: 'RL', 4: 'V', 5: 'Random'}
+DISPLAY_SCHEDULES = ('LR', 'RL', 'V', 'Random', 'Flat')
+
 DELAY_INCREMENT_MAPPING = {0: 100, 1: 200, 2: 300, 3: 400, 4: 500, 5: 600, 6: 700, 7: 800, 8: 900, 9: 1000, 10: 1500, 11: 2000, 12: 2500, 13: 3000}
+
+
+class LRURandomInt(object):
+    """ Least Recently Used Random Int: Class that return a random int that hs not been returned recently. """
+    MRU_PERCENT = 50
+
+    def __init__(self, nints, mru_percent=MRU_PERCENT):
+        nentries = int((float(nints) * mru_percent)/100)
+        self.max_mru_entries = 1 if nentries <= 0 else nentries
+        # The set provides membership functionality for the Most Recently Used (MRU) entries.
+        self.mru_entries = set()
+        # The Queue provides FIFO functionality for the Most Recently Used (MRU) entries.
+        self.qmru_entries = Queue()
+        self.nints = nints
+        log("Created 'LRURandomInt(nints={0}, mru_percent={1})' object with {2} nmru_entries ...".format(nints, mru_percent, self.max_mru_entries))
+
+    def _purge_mru_entries(self):
+        # If we exceeded the maximum number of allowed LRS entries remove one entry from the set.
+        if len(self.mru_entries) >= self.max_mru_entries:
+            value = self.qmru_entries.get()
+            # Remove from the set the value that we got from Queue's 'get(...)' method.
+            # This way we supply FIFO semantics while making use of the set's membership operator.
+            self.mru_entries.remove(value)
+            log("Number of allowed MRU entries exceeded ({0} >= {1}). Popped value = '{2}'.".format(len(self.mru_entries) + 1, self.max_mru_entries, value))
+
+    def _add_mru_entry(self, value):
+        self.mru_entries.add(value)
+        self.qmru_entries.put(value)
+
+    def get(self):
+        # If we only have one entry we should always return that one.
+        if self.nints <= 1:
+            return 0
+
+        # At this point 'self.nints >= 2' so we have a choice to return.
+        new_random_int = random.randint(0, self.nints - 1)
+        log("Generated value '{0}' is {1}in the MRU set: {2}".format(new_random_int, "" if new_random_int in self.mru_entries else "not ", self.mru_entries))
+
+        if new_random_int in self.mru_entries:
+            # The entry generated is in the LRU set. Search for the next value that is not in the LRU set.
+            while True:
+                # While handling overflows increment 'random_int' until we find a value not in 'self.mru_entries'.
+                new_random_int += 1
+                if new_random_int >= self.nints:
+                    new_random_int = 0
+
+                if new_random_int not in self.mru_entries:
+                    break
+
+        log("Returning LRU random int '{0}'.".format(new_random_int))
+        self._purge_mru_entries()
+        self._add_mru_entry(new_random_int)
+        return new_random_int
+
+
+display_schedule_random_int = LRURandomInt(len(DISPLAY_SCHEDULES))
+playlist_random_int = None
 
 
 def display_notification(message, time_in_s=10):
@@ -53,24 +114,31 @@ def get_local_ip_address():
 
 
 def get_display_schedule(schedule_type, total_displays, delay_increment):
-    display_schedules = ('LR', 'RL', 'V', 'Random', 'Flat')
+    global display_schedule_random_int
     if schedule_type == 'Any':
-        schedule_type = random.choice(display_schedules)
+        # Use 'display_schedule_random_int' to guarantee that we do not get the same consecutive display schedules.
+        schedule_type = DISPLAY_SCHEDULES[display_schedule_random_int.get()]
 
-    log("Using '{0}' schedule type.".format(schedule_type))
+    log("Using '{0}' display schedule type ...".format(schedule_type))
 
     if schedule_type == 'LR':
         return [i * delay_increment for i in xrange(total_displays)]
     elif schedule_type == 'RL':
         return [(total_displays - i - 1) * delay_increment for i in xrange(total_displays)]
     elif schedule_type == 'V':
+        # If the total number of displays is less than or equal to 2 we have a flat display schedule.
         if total_displays <= 2:
             return [0 for i in xrange(total_displays)]
+
+        # Calculate the left part of the display schedule.
         left_list_len = int(round(float(total_displays)/2))
         display_schedule = [(left_list_len - i - 1) * delay_increment * 2 for i in xrange(left_list_len)]
+
+        # Calculate the right side of the display schedule.
         right_list = display_schedule[0:left_list_len - (total_displays % 2)]
         right_list.reverse()
-        log("display_schedule: {0}  left_list_len: {1}  right_list: {2}".format(display_schedule, left_list_len, right_list))
+
+        # Append the right side of the display schedule to create the final one.
         display_schedule.extend(right_list)
         return display_schedule
     elif schedule_type == 'Random':
@@ -115,7 +183,8 @@ def generate_playlist(pano_folder, recurse_into_subfolders, playlist_file_name=P
 
 
 def get_random_file_path_from_paylist(playlist_file_name, nitems):
-    idx = random.randint(0, nitems - 1)
+    global playlist_random_int
+    idx = playlist_random_int.get()
     current_idx = 0
 
     for line in open(playlist_file_name):
@@ -143,6 +212,7 @@ def yield_random_pano_paths_from_palylist(playlist_file_name, nitems):
 
 
 def pano_paths(pano_folder, recurse_into_subfolders=True, randomize=True):
+    global playlist_random_int
     npano_paths = 0
 
     if not pano_folder:
@@ -153,6 +223,9 @@ def pano_paths(pano_folder, recurse_into_subfolders=True, randomize=True):
     if not nitems:
         #display_notification("Generated playlist has no items")
         return
+
+    # Create e new 'LRURandomInt' object based on the current number of items in the playlist.
+    playlist_random_int = LRURandomInt(nitems)
 
     if randomize:
         for pano_file_path in yield_random_pano_paths_from_palylist(playlist_file_name, nitems):
