@@ -73,11 +73,11 @@ msgid "Display schedule"
 msgstr ""
 
 msgctxt "#32049"
-msgid "Flat"
+msgid "Random"
 msgstr ""
 
 msgctxt "#32050"
-msgid "Any"
+msgid "Flat"
 msgstr ""
 
 msgctxt "#32051"
@@ -93,10 +93,14 @@ msgid "V"
 msgstr ""
 
 msgctxt "#32054"
-msgid "Random"
+msgid "ReverseV"
 msgstr ""
 
 msgctxt "#32055"
+msgid "Shuffle"
+msgstr ""
+
+msgctxt "#32060"
 msgid "Delay increment (ms)"
 msgstr ""
 

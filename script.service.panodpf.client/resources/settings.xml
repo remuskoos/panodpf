@@ -11,8 +11,8 @@
         <setting label="32043" type="enum" id="rotation" default="1" lvalues="32044|32045|32046"/>
         <setting label="32039" type="enum" id="total_displays" default="2" values="1|2|3|4|5|6|7|8|9"/>
         <setting type="sep"/>
-        <setting label="32048" type="enum" id="display_schedule_type" default="1" lvalues="32049|32050|32051|32052|32053|32054"/>
-        <setting label="32055" type="enum" id="delay_increment" default="3" values="100|200|300|400|500|600|700|800|900|1000|1500|2000|2500|3000"/>
+        <setting label="32048" type="enum" id="display_schedule_type" default="0" lvalues="32049|32050|32051|32052|32053|32054|32055"/>
+        <setting label="32060" type="enum" id="delay_increment" default="3" values="100|200|300|400|500|600|700|800|900|1000|1500|2000|2500|3000"/>
         <setting type="sep"/>
         <setting label="32042" type="slider" id="server_timeout_wait" default="10" range="1,15" option="int" />
     </category>

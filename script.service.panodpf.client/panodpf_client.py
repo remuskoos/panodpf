@@ -36,8 +36,8 @@ except ImportError:
 ALLOWED_EXTENSIONS = (".jpg", ".png", ".tiff", ".gif")
 MAX_REQUEST_ID = 100000
 PLAYLIST_FILE_NAME = "/tmp/PANODPF.playlist"
-DISPLAY_SCHEDULE_TYPE_MAPPING = {0: 'Flat', 1: 'Any', 2: 'LR', 3: 'RL', 4: 'V', 5: 'Random'}
-DISPLAY_SCHEDULES = ('LR', 'RL', 'V', 'Random', 'Flat')
+DISPLAY_SCHEDULE_TYPE_MAPPING = {0: 'Random', 1: 'Flat', 2: 'LR', 3: 'RL', 4: 'V', 5: 'ReverseV', 6: 'Shuffle'}
+DISPLAY_SCHEDULES = ('Flat', 'LR', 'RL', 'V', 'ReverseV', 'Shuffle')
 
 DELAY_INCREMENT_MAPPING = {0: 100, 1: 200, 2: 300, 3: 400, 4: 500, 5: 600, 6: 700, 7: 800, 8: 900, 9: 1000, 10: 1500, 11: 2000, 12: 2500, 13: 3000}
 
@@ -54,7 +54,7 @@ class LRURandomInt(object):
         # The Queue provides FIFO functionality for the Most Recently Used (MRU) entries.
         self.qmru_entries = Queue()
         self.nints = nints
-        log("Created 'LRURandomInt(nints={0}, mru_percent={1})' object with {2} nmru_entries ...".format(nints, mru_percent, self.max_mru_entries))
+        log("Created 'LRURandomInt(nints={0}, mru_percent={1})' object with {2} MRU entries ...".format(nints, mru_percent, self.max_mru_entries))
 
     def _purge_mru_entries(self):
         # If we exceeded the maximum number of allowed LRS entries remove one entry from the set.
@@ -115,7 +115,7 @@ def get_local_ip_address():
 
 def get_display_schedule(schedule_type, total_displays, delay_increment):
     global display_schedule_random_int
-    if schedule_type == 'Any':
+    if schedule_type == 'Random':
         # Use 'display_schedule_random_int' to guarantee that we do not get the same consecutive display schedules.
         schedule_type = DISPLAY_SCHEDULES[display_schedule_random_int.get()]
 
@@ -141,7 +141,23 @@ def get_display_schedule(schedule_type, total_displays, delay_increment):
         # Append the right side of the display schedule to create the final one.
         display_schedule.extend(right_list)
         return display_schedule
-    elif schedule_type == 'Random':
+    elif schedule_type == 'ReverseV':
+        # If the total number of displays is less than or equal to 2 we have a flat display schedule.
+        if total_displays <= 2:
+            return [0 for i in xrange(total_displays)]
+
+        # Calculate the left part of the display schedule.
+        left_list_len = int(round(float(total_displays)/2))
+        display_schedule = [i * delay_increment * 2 for i in xrange(left_list_len)]
+
+        # Calculate the right side of the display schedule.
+        right_list = display_schedule[0:left_list_len - (total_displays % 2)]
+        right_list.reverse()
+
+        # Append the right side of the display schedule to create the final one.
+        display_schedule.extend(right_list)
+        return display_schedule
+    elif schedule_type == 'Shuffle':
         random_schedule = [i * delay_increment for i in xrange(total_displays)]
         random.shuffle(random_schedule)
         return random_schedule
