@@ -104,3 +104,22 @@ msgctxt "#32060"
 msgid "Delay increment (ms)"
 msgstr ""
 
+msgctxt "#32061"
+msgid "Annotate image"
+msgstr ""
+
+msgctxt "#32062"
+msgid "Horizontal annotation offset"
+msgstr ""
+
+msgctxt "#32063"
+msgid "Vertical annotation offset"
+msgstr ""
+
+msgctxt "#32064"
+msgid "Annotation font size"
+msgstr ""
+
+msgctxt "#32065"
+msgid "Annotation font opacity"
+msgstr ""

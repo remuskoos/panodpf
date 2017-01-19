@@ -33,6 +33,8 @@ except ImportError:
     def log(message, level=None):
         print message
 
+ANNOTATION_FONT_FILE_DEFAULT = "LiberationSans-Bold.ttf"
+
 ALLOWED_EXTENSIONS = (".jpg", ".png", ".tiff", ".gif")
 MAX_REQUEST_ID = 100000
 PLAYLIST_FILE_NAME = "/tmp/PANODPF.playlist"
@@ -324,6 +326,64 @@ def set_up_networking(multicast_address, multicast_port, server_timeout_wait=5):
     return sock, multicast_group
 
 
+def get_location_from_full_path(full_path):
+    full_path_list = os.path.normpath(full_path).split(os.sep)
+    if len(full_path_list) == 0 or len(full_path_list) == 1:
+        return ""
+
+    if len(full_path_list) == 2:
+        return full_path_list[-2]
+
+    return "{0}, {1}".format(full_path_list[-2], full_path_list[-3])
+
+
+def get_annotation_info(pano_path):
+    annotate = True if __addon__.getSetting('annotate_image').lower() == "true" else False
+    if not annotate:
+        return None
+
+    text = get_location_from_full_path(pano_path)
+
+    # Get annotation settings.
+    x = int(__addon__.getSetting('annotation_horizontal_offset'))
+    y = int(__addon__.getSetting('annotation_vertical_offset'))
+    font_size = int(__addon__.getSetting('annotation_font_size'))
+    font_opacity = int(__addon__.getSetting('annotation_font_opacity'))
+    # Could be a setting in the future.
+    font_file = ANNOTATION_FONT_FILE_DEFAULT
+
+    return {"text": text,
+            "text_offset": (x, y),
+            "font_file": font_file,
+            "font_size": font_size,
+            "font_opacity": font_opacity}
+
+
+def send_process_pano_request(sock, multicast_group, request_id, pano_path):
+    # Get settings.
+    total_displays = int(__addon__.getSetting('total_displays')) + 1
+    rotation = int(__addon__.getSetting('rotation'))
+
+    # Build, send request and wait for all replies.
+    process_pano_params = {"path": pano_path, "rotation": rotation, "total_displays": total_displays, "annotate": get_annotation_info(pano_path)}
+    send_request_and_process_replies(sock, multicast_group, total_displays, "process_pano", process_pano_params, request_id)
+
+
+def send_display_pano_request(sock, multicast_group, request_id, pano_path):
+    # Get settings.
+    total_displays = int(__addon__.getSetting('total_displays')) + 1
+    display_schedule_type_idx = int(__addon__.getSetting('display_schedule_type'))
+    delay_increment_idx = int(__addon__.getSetting('delay_increment'))
+    # log("display_schedule_type_idx = {0}  delay_increment_idx = {1}".format(display_schedule_type_idx, delay_increment_idx))
+    display_schedule_type = DISPLAY_SCHEDULE_TYPE_MAPPING[display_schedule_type_idx]
+    delay_increment = DELAY_INCREMENT_MAPPING[delay_increment_idx]
+    # log("display_schedule_type = {0}  delay_increment = {1}".format(display_schedule_type, delay_increment))
+
+    display_pano_params = {"path": pano_path, "total_displays": total_displays,
+                           "display_schedule": get_display_schedule(display_schedule_type, total_displays, delay_increment)}
+    send_request_and_process_replies(sock, multicast_group, total_displays, "display_pano", display_pano_params, request_id)
+
+
 def start_panodpf_client():
     # Instantiate a monitor object so we can check if we need to exit.
     monitor = xbmc.Monitor()
@@ -352,22 +412,11 @@ def start_panodpf_client():
                 log("Could not open pano '{0}'. Namespace might have changed. Rebuilding playlist ...".format(pano_path))
                 break
 
-            total_displays = int(__addon__.getSetting('total_displays')) + 1
-            rotation = int(__addon__.getSetting('rotation'))
-            display_schedule_type_idx = int(__addon__.getSetting('display_schedule_type'))
-            delay_increment_idx = int(__addon__.getSetting('delay_increment'))
-            #log("display_schedule_type_idx = {0}  delay_increment_idx = {1}".format(display_schedule_type_idx, delay_increment_idx))
-            display_schedule_type = DISPLAY_SCHEDULE_TYPE_MAPPING[display_schedule_type_idx]
-            delay_increment = DELAY_INCREMENT_MAPPING[delay_increment_idx]
-            #log("display_schedule_type = {0}  delay_increment = {1}".format(display_schedule_type, delay_increment))
+            send_process_pano_request(sock, multicast_group, request_id, pano_path)
 
-            process_pano_params = {"path": pano_path, "rotation": rotation, "total_displays": total_displays}
-            send_request_and_process_replies(sock, multicast_group, total_displays, "process_pano", process_pano_params, request_id)
-
+            # Increment the request ID so servers don't think this request is a duplicate of the process pano request.
             request_id += 1
-            display_pano_params = {"path": pano_path, "total_displays": total_displays,
-                                   "display_schedule": get_display_schedule(display_schedule_type, total_displays, delay_increment)}
-            send_request_and_process_replies(sock, multicast_group, total_displays, "display_pano", display_pano_params, request_id)
+            send_display_pano_request(sock, multicast_group, request_id, pano_path)
 
             # Sleep while the image is being displayed.
             time.sleep(int(__addon__.getSetting('slideshow_delay')))
