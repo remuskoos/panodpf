@@ -1,0 +1,2 @@
+#!/bin/bash
+python /storage/.kodi/addons/script.service.panodpf.client/panodpf_client.py 239.0.0.2 10000 5 $1
