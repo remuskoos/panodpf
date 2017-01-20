@@ -24,6 +24,7 @@ __cwd__        = __addon__.getAddonInfo('path').decode("utf-8")
 
 full_pano_path_to_pano_slice_path = {}
 
+
 def safe_remove_file(full_file_path):
     if not full_file_path:
         return

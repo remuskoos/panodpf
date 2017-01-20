@@ -350,7 +350,7 @@ def get_annotation_info(pano_path):
     font_size = int(__addon__.getSetting('annotation_font_size'))
     font_opacity = int(__addon__.getSetting('annotation_font_opacity'))
     # Could be a setting in the future.
-    font_file = ANNOTATION_FONT_FILE_DEFAULT
+    font_file = __addon__.getSetting('annotation_font') + ".ttf"
 
     return {"text": text,
             "text_offset": (x, y),

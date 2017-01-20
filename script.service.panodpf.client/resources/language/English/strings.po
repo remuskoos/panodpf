@@ -109,17 +109,21 @@ msgid "Annotate image"
 msgstr ""
 
 msgctxt "#32062"
-msgid "Horizontal annotation offset"
+msgid "Horizontal offset"
 msgstr ""
 
 msgctxt "#32063"
-msgid "Vertical annotation offset"
+msgid "Vertical offset"
 msgstr ""
 
 msgctxt "#32064"
-msgid "Annotation font size"
+msgid "Font"
 msgstr ""
 
 msgctxt "#32065"
-msgid "Annotation font opacity"
+msgid "Font size"
+msgstr ""
+
+msgctxt "#32066"
+msgid "Font opacity"
 msgstr ""
